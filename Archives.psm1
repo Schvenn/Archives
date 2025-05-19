@@ -15,7 +15,6 @@ Get-ChildItem "$tempDir\Transcripts" -File -Recurse -ErrorAction SilentlyContinu
 [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $zipPath)
 Write-Host -f green "`nCreated archive: $zipPath"; Remove-Item $tempDir -Recurse -Force}
 
-
 if ($mode -match "(?i)^backup" -and $details -match "^(?i)Powershell$") {# Temporarily switch to PowerShell if $details was set to PowerShell.
 sl (Split-Path $profile); $startDir = Get-Location}
 
