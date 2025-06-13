@@ -110,6 +110,8 @@ Write-Host -f white "`nRestoring '$zipFilePath' to: $parentDir"
 try {Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory($zipFilePath, $parentDir, $true); Write-Host "Restore complete.`n"} 
 catch {Write-Host -f red "Failed to restore from backup: $_`n"}}; ""}
 
+Export-ModuleMember -Function archives
+
 <#
 ## Archives
 
