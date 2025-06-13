@@ -1,7 +1,7 @@
 # Archives
 This module will provide you with a very basic archival backup and retrieval utility that creates and restores backups based on a recursive directory structure.
 	
-	Usage: archives (backup/restore) (file pattern/PowerShell) -force
+	Usage: archives (backup/restore) (file pattern/PowerShell) -force -help
 
 Configuration:
 
