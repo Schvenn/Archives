@@ -1,4 +1,4 @@
-function archives ($mode, $details, [switch]$force) {#Backup or restore files for the current directory.
+function archives ($mode, $details, [switch]$force, [switch]$help) {#Backup or restore files for the current directory.
 $startDir = get-location
 
 # Load the user configuration.
@@ -6,6 +6,41 @@ $baseModulePath = "$powershell\Modules\Archives"; $configPath = Join-Path $baseM
 if (!(Test-Path $configPath)) {throw "Config file not found at $configPath"}
 $config = Import-PowerShellDataFile -Path $configPath
 $maximumage = $config.PrivateData.maximumage; $rawExclusions = $config.PrivateData.exclusions; [int]$versionstokeep = $config.PrivateData.versionstokeep - 1
+
+if (-not $mode -and -not $details -and -not $force -and -not $help) {Write-Host -f cyan "`nUsage: archives (backup/restore) (file pattern/PowerShell) -force -help`n"; return}
+
+if ($help) {# Inline help.
+function wordwrap ($field, [int]$maximumlinelength = 65) {# Modify fields sent to it with proper word wrapping.
+if ($null -eq $field -or $field.Length -eq 0) {return $null}
+$breakchars = ',.;?!\/ '; $wrapped = @()
+
+foreach ($line in $field -split "`n") {if ($line.Trim().Length -eq 0) {$wrapped += ''; continue}
+$remaining = $line.Trim()
+while ($remaining.Length -gt $maximumlinelength) {$segment = $remaining.Substring(0, $maximumlinelength); $breakIndex = -1
+
+foreach ($char in $breakchars.ToCharArray()) {$index = $segment.LastIndexOf($char)
+if ($index -gt $breakIndex) {$breakChar = $char; $breakIndex = $index}}
+if ($breakIndex -lt 0) {$breakIndex = $maximumlinelength - 1; $breakChar = ''}
+$chunk = $segment.Substring(0, $breakIndex + 1).TrimEnd(); $wrapped += $chunk; $remaining = $remaining.Substring($breakIndex + 1).TrimStart()}
+
+if ($remaining.Length -gt 0) {$wrapped += $remaining}}
+return ($wrapped -join "`n")}
+
+function scripthelp ($section) {# (Internal) Generate the help sections from the comments section of the script.
+""; Write-Host -f yellow ("-" * 100); $pattern = "(?ims)^## ($section.*?)(##|\z)"; $match = [regex]::Match($scripthelp, $pattern); $lines = $match.Groups[1].Value.TrimEnd() -split "`r?`n", 2; Write-Host $lines[0] -f yellow; Write-Host -f yellow ("-" * 100)
+if ($lines.Count -gt 1) {wordwrap $lines[1] 100| Out-String | Out-Host -Paging}; Write-Host -f yellow ("-" * 100)}
+$scripthelp = Get-Content -Raw -Path $PSCommandPath; $sections = [regex]::Matches($scripthelp, "(?im)^## (.+?)(?=\r?\n)")
+if ($sections.Count -eq 1) {cls; Write-Host "$([System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)) Help:" -f cyan; scripthelp $sections[0].Groups[1].Value; ""; return}
+
+$selection = $null
+do {cls; Write-Host "$([System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)) Help Sections:`n" -f cyan; for ($i = 0; $i -lt $sections.Count; $i++) {
+"{0}: {1}" -f ($i + 1), $sections[$i].Groups[1].Value}
+if ($selection) {scripthelp $sections[$selection - 1].Groups[1].Value}
+$input = Read-Host "`nEnter a section number to view"
+if ($input -match '^\d+$') {$index = [int]$input
+if ($index -ge 1 -and $index -le $sections.Count) {$selection = $index}
+else {$selection = $null}} else {""; return}}
+while ($true); return}
 
 # Function to create the ZIP files.
 function Add-To-Zip ($sourceDir, $zipPath) {Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -80,7 +115,7 @@ catch {Write-Host -f red "Failed to restore from backup: $_`n"}}; ""}
 
 This module will provide you with a very basic archival backup and retrieval utility that creates and restores backups based on a recursive directory structure.
 
-Usage: archives (backup/restore) (file pattern/PowerShell) -force
+Usage: archives (backup/restore) (file pattern/PowerShell) -force -help
 
 Configuration:
 •  In the accompanying PSD1 file you can specify 3 different variables:
