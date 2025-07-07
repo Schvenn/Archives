@@ -10,9 +10,13 @@ $maximumage = $config.PrivateData.maximumage; $rawExclusions = $config.PrivateDa
 if (-not $mode -and -not $details -and -not $force -and -not $help) {Write-Host -f cyan "`nUsage: archives (backup/restore) (file pattern/PowerShell) -force -help`n"; return}
 
 if ($help) {# Inline help.
-function wordwrap ($field, [int]$maximumlinelength = 65) {# Modify fields sent to it with proper word wrapping.
-if ($null -eq $field -or $field.Length -eq 0) {return $null}
+# Modify fields sent to it with proper word wrapping.
+function wordwrap ($field, $maximumlinelength) {if ($null -eq $field -or $field.Length -eq 0) {return $null}
 $breakchars = ',.;?!\/ '; $wrapped = @()
+
+if (-not $maximumlinelength) {[int]$maximumlinelength = (100, $Host.UI.RawUI.WindowSize.Width | Measure-Object -Maximum).Maximum}
+if ($maximumlinelength) {if ($maximumlinelength -lt 60) {[int]$maximumlinelength = 60}
+if ($maximumlinelength -gt $Host.UI.RawUI.BufferSize.Width) {[int]$maximumlinelength = $Host.UI.RawUI.BufferSize.Width}}
 
 foreach ($line in $field -split "`n") {if ($line.Trim().Length -eq 0) {$wrapped += ''; continue}
 $remaining = $line.Trim()
@@ -43,7 +47,7 @@ else {$selection = $null}} else {""; return}}
 while ($true); return}
 
 # Function to create the ZIP files.
-function Add-To-Zip ($sourceDir, $zipPath) {Add-Type -AssemblyName System.IO.Compression.FileSystem
+function addtozip ($sourceDir, $zipPath) {Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (Test-Path $zipPath) {Remove-Item $zipPath -Force}
 $tempDir = Join-Path $env:TEMP "archive_tmp_$(Get-Random)"; Copy-Item $sourceDir $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 Get-ChildItem "$tempDir\Transcripts" -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {try {$stream = [System.IO.File]::Open($_.FullName, 'Open', 'Read', 'ReadWrite'); $stream.Close()} catch {Write-Warning "Skipping locked file: $($_.Name)"; Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue}}
@@ -75,7 +79,7 @@ $filesToZip = Get-ChildItem -Path $rootPath -Recurse -File; $fileCount = $filesT
 if ($fileCount -gt 500 -or $totalSizeMB -gt 100) {Write-Host -f yellow "`nWARNING:"; Write-Host "You're about to zip $fileCount files totaling $totalSizeMB MB."; $response = Read-Host "Proceed? (Y/N)"; if ($response -notin @('Y', 'y')) {Write-Host "Aborted by user."; return}}
 
 if ($archive -eq $true) {# Create the zip
-Push-Location $parentDir; Add-To-Zip $folderName $zipFile; Pop-Location
+Push-Location $parentDir; addtozip $folderName $zipFile; Pop-Location
 
 # Remove backup zips and custom user exclusions from within the new zip.
 try {$zip = [System.IO.Compression.ZipFile]::Open($zipFile, 'Update')
@@ -134,8 +138,7 @@ Backups:
 • Backup will backup the current directory structure, including the current directory, recursively.
 • Specify "PowerShell" in order to switch to the user's $profile directory, create a backup of that directory structure and switch back to the current directory.
 • Use the -force switch to create a backup, even if the latest ZIP archive is newer than the specified maximumage in the configuration file.
-
-Restoration:
+## Restoration
 • Restore will unZip files matching the backup file pattern: "folder - mm-dd-yyy.zip".
 • As this is a very simple tool, it will only extract files in the ZIP file, overwriting existing copies of files. New files will remain unchanged.
 • If no other parameters are provided, the module will present a menu of matching files to use for the extraction.
@@ -143,4 +146,26 @@ Restoration:
 • If there are too many matches or no matches for the specified file pattern, the module will fail gracefully, with an accompanying message.
 
 This tool is intentionally simple, designed to create living archives for basic versioning purposes. It should not be relied on as a sole backup solution. Since the archive resides within the same directory that it is backing up, it's vulnerable to accidental deletion or file system corruption. I built it as a lightweight way to version active directories, like code bases or evolving documents, and for that purpose, it serves a practical and effective role.
+## License
+MIT License
+
+Copyright © 2025 Craig Plath
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell 
+copies of the Software, and to permit persons to whom the Software is 
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in 
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN 
+THE SOFTWARE.
 ##>
