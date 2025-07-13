@@ -9,42 +9,50 @@ $maximumage = $config.PrivateData.maximumage; $rawExclusions = $config.PrivateDa
 
 if (-not $mode -and -not $details -and -not $force -and -not $help) {Write-Host -f cyan "`nUsage: archives (backup/restore) (file pattern/PowerShell) -force -help`n"; return}
 
-if ($help) {# Inline help.
 # Modify fields sent to it with proper word wrapping.
-function wordwrap ($field, $maximumlinelength) {if ($null -eq $field -or $field.Length -eq 0) {return $null}
+function wordwrap ($field, $maximumlinelength) {if ($null -eq $field) {return $null}
 $breakchars = ',.;?!\/ '; $wrapped = @()
-
 if (-not $maximumlinelength) {[int]$maximumlinelength = (100, $Host.UI.RawUI.WindowSize.Width | Measure-Object -Maximum).Maximum}
-if ($maximumlinelength) {if ($maximumlinelength -lt 60) {[int]$maximumlinelength = 60}
-if ($maximumlinelength -gt $Host.UI.RawUI.BufferSize.Width) {[int]$maximumlinelength = $Host.UI.RawUI.BufferSize.Width}}
-
-foreach ($line in $field -split "`n") {if ($line.Trim().Length -eq 0) {$wrapped += ''; continue}
-$remaining = $line.Trim()
+if ($maximumlinelength -lt 60) {[int]$maximumlinelength = 60}
+if ($maximumlinelength -gt $Host.UI.RawUI.BufferSize.Width) {[int]$maximumlinelength = $Host.UI.RawUI.BufferSize.Width}
+foreach ($line in $field -split "`n", [System.StringSplitOptions]::None) {if ($line -eq "") {$wrapped += ""; continue}
+$remaining = $line
 while ($remaining.Length -gt $maximumlinelength) {$segment = $remaining.Substring(0, $maximumlinelength); $breakIndex = -1
-
 foreach ($char in $breakchars.ToCharArray()) {$index = $segment.LastIndexOf($char)
-if ($index -gt $breakIndex) {$breakChar = $char; $breakIndex = $index}}
-if ($breakIndex -lt 0) {$breakIndex = $maximumlinelength - 1; $breakChar = ''}
-$chunk = $segment.Substring(0, $breakIndex + 1).TrimEnd(); $wrapped += $chunk; $remaining = $remaining.Substring($breakIndex + 1).TrimStart()}
-
-if ($remaining.Length -gt 0) {$wrapped += $remaining}}
+if ($index -gt $breakIndex) {$breakIndex = $index}}
+if ($breakIndex -lt 0) {$breakIndex = $maximumlinelength - 1}
+$chunk = $segment.Substring(0, $breakIndex + 1); $wrapped += $chunk; $remaining = $remaining.Substring($breakIndex + 1)}
+if ($remaining.Length -gt 0 -or $line -eq "") {$wrapped += $remaining}}
 return ($wrapped -join "`n")}
 
+# Display a horizontal line.
+function line ($colour, $length, [switch]$pre, [switch]$post, [switch]$double) {if (-not $length) {[int]$length = (100, $Host.UI.RawUI.WindowSize.Width | Measure-Object -Maximum).Maximum}
+if ($length) {if ($length -lt 60) {[int]$length = 60}
+if ($length -gt $Host.UI.RawUI.BufferSize.Width) {[int]$length = $Host.UI.RawUI.BufferSize.Width}}
+if ($pre) {Write-Host ""}
+$character = if ($double) {"="} else {"-"}
+Write-Host -f $colour ($character * $length)
+if ($post) {Write-Host ""}}
+
+function help {# Inline help.
 function scripthelp ($section) {# (Internal) Generate the help sections from the comments section of the script.
-""; Write-Host -f yellow ("-" * 100); $pattern = "(?ims)^## ($section.*?)(##|\z)"; $match = [regex]::Match($scripthelp, $pattern); $lines = $match.Groups[1].Value.TrimEnd() -split "`r?`n", 2; Write-Host $lines[0] -f yellow; Write-Host -f yellow ("-" * 100)
-if ($lines.Count -gt 1) {wordwrap $lines[1] 100| Out-String | Out-Host -Paging}; Write-Host -f yellow ("-" * 100)}
+line yellow 100 -pre; $pattern = "(?ims)^## ($section.*?)(##|\z)"; $match = [regex]::Match($scripthelp, $pattern); $lines = $match.Groups[1].Value.TrimEnd() -split "`r?`n", 2; Write-Host $lines[0] -f yellow; line yellow 100
+if ($lines.Count -gt 1) {wordwrap $lines[1] 100 | Write-Host -f white | Out-Host -Paging}; line yellow 100}
 $scripthelp = Get-Content -Raw -Path $PSCommandPath; $sections = [regex]::Matches($scripthelp, "(?im)^## (.+?)(?=\r?\n)")
 if ($sections.Count -eq 1) {cls; Write-Host "$([System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)) Help:" -f cyan; scripthelp $sections[0].Groups[1].Value; ""; return}
 
 $selection = $null
-do {cls; Write-Host "$([System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)) Help Sections:`n" -f cyan; for ($i = 0; $i -lt $sections.Count; $i++) {
-"{0}: {1}" -f ($i + 1), $sections[$i].Groups[1].Value}
+do {cls; Write-Host -f cyan "$(Get-ChildItem (Split-Path $PSCommandPath) | Where-Object { $_.FullName -ieq $PSCommandPath } | Select-Object -ExpandProperty BaseName) Help Sections:`n"
+for ($i = 0; $i -lt $sections.Count; $i++) {Write-Host "$($i + 1). " -f cyan -n; Write-Host $sections[$i].Groups[1].Value -f white}
 if ($selection) {scripthelp $sections[$selection - 1].Groups[1].Value}
-$input = Read-Host "`nEnter a section number to view"
+Write-Host -f yellow "`nEnter a section number to view " -n; $input = Read-Host
 if ($input -match '^\d+$') {$index = [int]$input
 if ($index -ge 1 -and $index -le $sections.Count) {$selection = $index}
 else {$selection = $null}} else {""; return}}
 while ($true); return}
+
+# External call to help.
+if ($help) {help; return}
 
 # Function to create the ZIP files.
 function addtozip ($sourceDir, $zipPath) {Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -118,7 +126,6 @@ Export-ModuleMember -Function archives
 
 <#
 ## Archives
-
 This module will provide you with a very basic archival backup and retrieval utility that creates and restores backups based on a recursive directory structure.
 
 Usage: archives (backup/restore) (file pattern/PowerShell) -force -help
